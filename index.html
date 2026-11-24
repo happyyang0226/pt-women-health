@@ -1594,6 +1594,7 @@
           </button>
         `;
       }).join('');
+      if(window.installLectureBreakNav) window.installLectureBreakNav();
     }
 
     function selectModule(index) {
@@ -2277,5 +2278,72 @@ function showBirthStage(i){set3DMode('birth');const slider=document.querySelecto
 function sync(){const root=document.getElementById('sceneControlsContent');if(!root)return;let bar=document.getElementById('birthStageTabs');if(current3DMode!=='birth'){if(bar)bar.remove();return;}const slider=root.querySelector('input[type=range]');if(!slider)return;if(!bar){bar=document.createElement('div');bar.id='birthStageTabs';bar.setAttribute('role','group');bar.setAttribute('aria-label','7단계 분만기전 관찰');names.forEach((name,i)=>{const b=document.createElement('button');b.type='button';b.textContent=(i+1)+'. '+name;b.onclick=()=>{const r=root.querySelector('input[type=range]');if(r){r.value=(i+.5)/7;r.dispatchEvent(new Event('input',{bubbles:true}));sync();}};bar.appendChild(b);});root.appendChild(bar);}let stage=Math.min(6,Math.floor(Number(slider.value)*7));Array.from(bar.children).forEach((b,i)=>{const v=String(i===stage);if(b.getAttribute('aria-pressed')!==v)b.setAttribute('aria-pressed',v);});}
 window.addEventListener('DOMContentLoaded',()=>{const root=document.getElementById('sceneControlsContent');if(root){new MutationObserver(sync).observe(root,{childList:true});root.addEventListener('input',sync);sync();setInterval(sync,120);}});
 })();
-</script></body>
+</script>
+<style>
+#lectureBreakDialog{border:0;border-radius:24px;width:min(540px,92vw);max-height:90vh;padding:0;color:#27417f;background:#fff;box-shadow:0 24px 90px #0005}
+#lectureBreakDialog::backdrop{background:#14233bea}
+#lectureBreakDialog .breakInner{text-align:center;padding:clamp(20px,5vw,42px)}
+#lectureBreakDialog button,.lectureBreakEnd button{border:1px solid #cbd5e1;border-radius:12px;padding:10px 16px;font-weight:700;background:white;color:#27417f;cursor:pointer}
+#lectureBreakDialog button.breakPrimary,.lectureBreakEnd button{background:#5380f0;color:white;border-color:#5380f0}
+#lectureBreakClock{font-size:clamp(64px,15vw,112px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;color:#27417f;margin:18px 0}
+.lectureBreakNav{display:flex;align-items:center;gap:8px;flex-shrink:0;text-align:left;padding:10px 12px;border:1px dashed #d4a72c;border-radius:12px;background:#fffbeb;color:#854d0e;font-size:12px;font-weight:700}
+.lectureBreakEnd{margin-top:24px;padding:18px;border:1px solid #ead59b;background:#fffbeb;border-radius:16px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;color:#854d0e}
+</style>
+<dialog id="lectureBreakDialog" aria-labelledby="lectureBreakTitle">
+<div class="breakInner">
+<p style="font-weight:700;color:#5380f0;letter-spacing:.12em">LECTURE BREAK · V4.9</p>
+<h2 id="lectureBreakTitle" style="font-size:26px;font-weight:800;margin-top:8px">10분 휴식</h2>
+<p id="lectureBreakBetween" style="margin-top:8px;color:#64748b"></p>
+<div id="lectureBreakClock" role="timer">10:00</div>
+<progress id="lectureBreakProgress" value="0" max="600" style="width:100%;height:12px;accent-color:#5380f0"></progress>
+<p id="lectureBreakStatus" role="status" style="margin:16px 0;color:#64748b">휴식 중입니다.</p>
+<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px">
+<button type="button" id="lectureBreakPause">일시정지</button>
+<button type="button" id="lectureBreakReset">10분 초기화</button>
+<button type="button" id="lectureBreakNext" class="breakPrimary">다음 강의</button>
+<button type="button" id="lectureBreakClose">강의로 돌아가기</button>
+</div></div></dialog>
+<script>
+(function(){
+const el=id=>document.getElementById(id);
+const dialog=el('lectureBreakDialog');
+let end=0,remaining=600000,running=false,interval=null,nextIndex=2,returnFocus=null;
+function paint(){
+ if(running)remaining=Math.max(0,end-Date.now());
+ const seconds=Math.ceil(remaining/1000);
+ el('lectureBreakClock').textContent=String(Math.floor(seconds/60)).padStart(2,'0')+':'+String(seconds%60).padStart(2,'0');
+ el('lectureBreakProgress').value=600-seconds;
+ if(!seconds){running=false;clearInterval(interval);interval=null;el('lectureBreakStatus').textContent='휴식 시간이 종료되었습니다. 다음 강의를 시작하세요.';el('lectureBreakPause').disabled=true;}
+}
+function start(){clearInterval(interval);running=true;end=Date.now()+remaining;el('lectureBreakPause').disabled=false;el('lectureBreakPause').textContent='일시정지';el('lectureBreakStatus').textContent='휴식 중입니다.';paint();interval=setInterval(paint,250);}
+function stop(){if(running)remaining=Math.max(0,end-Date.now());running=false;clearInterval(interval);interval=null;}
+function close(){stop();dialog.close();if(returnFocus&&returnFocus.isConnected)returnFocus.focus();}
+window.openLectureBreak=function(after){
+ if(after!==2&&after!==5)return;
+ returnFocus=document.activeElement;nextIndex=after;stop();remaining=600000;
+ try{stopNarration();}catch(e){}
+ try{const b=el('fbPlay')||el('autoPlayBtn');if(b&&b.textContent.includes('일시정지'))b.click();}catch(e){}
+ el('lectureBreakTitle').textContent=(after===2?'1차':'2차')+' 휴식 · 10분';
+ el('lectureBreakBetween').textContent='PART '+String(after).padStart(2,'0')+' 종료 → PART '+String(after+1).padStart(2,'0')+' 시작';
+ el('lectureBreakNext').textContent='PART '+String(after+1).padStart(2,'0')+' 시작';
+ if(!dialog.open)dialog.showModal();start();
+};
+el('lectureBreakPause').onclick=function(){if(running){stop();paint();if(remaining>0){this.textContent='재개';el('lectureBreakStatus').textContent='일시정지 상태입니다.';}}else if(remaining>0)start();};
+el('lectureBreakReset').onclick=function(){stop();remaining=600000;start();};
+el('lectureBreakClose').onclick=close;
+el('lectureBreakNext').onclick=function(){const target=nextIndex;close();selectModule(target);};
+dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
+window.installLectureBreakNav=function(){
+ const nav=el('chapterNav');if(!nav)return;
+ for(const after of [2,5]){
+ if(nav.querySelector('[data-break-after="'+after+'"]'))continue;
+ const target=nav.querySelector('button[onclick="selectModule('+(after-1)+')"]');if(!target)continue;
+ const btn=document.createElement('button');btn.type='button';btn.className='lectureBreakNav';btn.dataset.breakAfter=after;btn.textContent='☕ '+(after===2?'1차':'2차')+' 휴식 · 10분';btn.onclick=()=>openLectureBreak(after);target.after(btn);
+ }
+};
+function init(){installLectureBreakNav();for(const after of [2,5]){const sec=el('chapter-'+(after-1));if(!sec||sec.querySelector('.lectureBreakEnd'))continue;const box=document.createElement('div');box.className='lectureBreakEnd';const label=document.createElement('strong');label.textContent='PART '+String(after).padStart(2,'0')+' 종료 · '+(after===2?'1차':'2차')+' 휴식 (10분)';const btn=document.createElement('button');btn.type='button';btn.textContent='10분 휴식 시작';btn.onclick=()=>openLectureBreak(after);box.append(label,btn);sec.append(box);}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
+</script>
+</body>
 </html>
